@@ -259,28 +259,22 @@ case "${ACTION:-}" in
       echo "No cached response. Ask Claude something first."
       exit 1
     fi
-    text=$(cat "$CACHE_FILE")
-    speak "$text"
-    echo "Speaking last response (${#text} chars)..."
+    speak "$(cat "$CACHE_FILE")"
     ;;
   *)
     # Text provided as args
     if [ -n "$REMAINING_ARGS" ]; then
       speak "$REMAINING_ARGS"
-      echo "Speaking: ${REMAINING_ARGS:0:50}..."
     # No args at all → read from cache
     elif [ -t 0 ] && [ $# -eq 0 ]; then
       if [ ! -f "$CACHE_FILE" ]; then
         echo "No cached response. Ask Claude something first."
         exit 1
       fi
-      text=$(cat "$CACHE_FILE")
-      speak "$text"
-      echo "Speaking last response (${#text} chars)..."
+      speak "$(cat "$CACHE_FILE")"
     # Stdin pipe
     elif [ ! -t 0 ]; then
-      text=$(cat)
-      speak "$text"
+      speak "$(cat)"
     fi
     ;;
 esac
