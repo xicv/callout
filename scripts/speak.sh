@@ -264,17 +264,19 @@ case "${ACTION:-}" in
   *)
     # Text provided as args
     if [ -n "$REMAINING_ARGS" ]; then
-      speak "$REMAINING_ARGS"
-    # No args at all → read from cache
-    elif [ -t 0 ] && [ $# -eq 0 ]; then
+      # Check if it's a file path
+      if [ -f "$REMAINING_ARGS" ]; then
+        speak "$(cat "$REMAINING_ARGS")"
+      else
+        speak "$REMAINING_ARGS"
+      fi
+    # No args → read from cache (works both in terminal and from Claude's Bash tool)
+    elif [ $# -eq 0 ]; then
       if [ ! -f "$CACHE_FILE" ]; then
         echo "No cached response. Ask Claude something first."
         exit 1
       fi
       speak "$(cat "$CACHE_FILE")"
-    # Stdin pipe
-    elif [ ! -t 0 ]; then
-      speak "$(cat)"
     fi
     ;;
 esac
