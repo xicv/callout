@@ -10,7 +10,8 @@ Speak Claude Code responses aloud using [Kokoro TTS](https://github.com/hexgrad/
 - 54 voices (American, British, French, Italian, Japanese, Mandarin)
 - Configurable voice, speed, and engine
 - Audio ducking (lowers Apple Music while speaking)
-- Smart interruption (stops playback when you type)
+- Smart interruption — stops playback when you start typing
+- Silent operation — no output noise, just audio
 - Markdown stripping for clean speech output
 
 ## Quick Start
@@ -23,9 +24,9 @@ cd callout
 
 The installer handles everything:
 1. Installs `kokoro-tts` via `uv`
-2. Downloads model files (~335MB)
+2. Downloads model files (~335MB) to `~/.local/share/kokoro-tts/`
 3. Registers the plugin hooks with Claude Code
-4. Creates the `/callout` skill
+4. Creates the `/callout` skill in `~/.claude/skills/`
 5. Lets you pick your default voice
 
 Then restart Claude Code and use `/callout`.
@@ -38,11 +39,18 @@ Then restart Claude Code and use `/callout`.
 | `/callout Hello world` | Speak custom text |
 | `/callout --voice=bf_emma` | Use a specific voice |
 | `/callout --speed=1.5` | Faster speech |
+| `/callout --voice=am_adam --speed=0.8 Hello` | Combine flags with text |
 | `/callout --auto-on` | Auto-speak every response |
 | `/callout --auto-off` | Disable auto-speak |
 | `/callout --list-voices` | Show all 54 voices |
 | `/callout --config` | Show current settings |
-| `/callout --stop` | Stop playback |
+| `/callout --stop` | Stop playback mid-speech |
+
+### Stopping Playback
+
+Two ways to cancel TTS mid-speech:
+- **Start typing** your next message — the interrupt hook kills playback automatically
+- **`/callout --stop`** — manual stop command
 
 ## Configuration
 
@@ -88,14 +96,16 @@ callout/
 
 **How it works:**
 1. **Stop hook** caches every Claude response to `/tmp/callout-last-response.txt`
-2. **`/callout`** reads the cache, strips markdown, pipes to Kokoro TTS
-3. **UserPromptSubmit hook** kills any playing audio when you type
+2. **`/callout`** reads the cache, strips markdown, pipes to Kokoro TTS streaming
+3. **UserPromptSubmit hook** kills any playing audio when you type next
 4. **SessionEnd hook** cleans up temp files
+
+The `/callout` skill is a minimal 8-line SKILL.md that delegates all logic to `speak.sh` — this keeps Claude's processing fast since it only needs to run a single bash command.
 
 ## Prerequisites
 
 - [Claude Code](https://claude.ai/code)
-- [uv](https://astral.sh/uv) (for kokoro-tts installation)
+- [uv](https://astral.sh/uv) (for kokoro-tts and Python deps)
 - [jq](https://jqlang.github.io/jq/) (usually pre-installed on macOS)
 - macOS (for `say` fallback and audio ducking)
 
@@ -105,13 +115,20 @@ callout/
 ./uninstall.sh
 ```
 
-Interactively removes the skill, plugin registration, cache, temp files, and optionally the model files (~335MB) and kokoro-tts CLI.
+Interactively removes:
+- `/callout` skill from `~/.claude/skills/`
+- Plugin registration and marketplace from Claude Code
+- Plugin cache from `~/.claude/plugins/cache/`
+- Temp files and logs
+- (Optional) Model files from `~/.local/share/kokoro-tts/` (~335MB)
+- (Optional) `kokoro-tts` CLI tool
 
 ## Credits
 
 - [Kokoro TTS](https://github.com/hexgrad/kokoro) — 82M param open-source TTS model (Apache 2.0)
-- [kokoro-tts CLI](https://github.com/nazdridoy/kokoro-tts) — CLI wrapper
+- [kokoro-tts CLI](https://github.com/nazdridoy/kokoro-tts) — CLI wrapper with streaming
 - [kokoro-onnx](https://github.com/thewh1teagle/kokoro-onnx) — ONNX runtime + model files
+- [ktaletsk/claude-code-tts](https://github.com/ktaletsk/claude-code-tts) — reference implementation
 
 ## License
 
