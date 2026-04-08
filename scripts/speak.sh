@@ -217,33 +217,70 @@ speak() {
   esac
 }
 
+# --- Parse args: extract flags, collect remaining text ---
+REMAINING_ARGS=""
+ACTION=""
+for arg in "$@"; do
+  case "$arg" in
+    --list-voices) ACTION="list-voices" ;;
+    --config) ACTION="config" ;;
+    --from-cache) ACTION="from-cache" ;;
+    --stop) ACTION="stop" ;;
+    --auto-on) ACTION="auto-on" ;;
+    --auto-off) ACTION="auto-off" ;;
+    --voice=*) VOICE="${arg#*=}" ;;
+    --speed=*) SPEED="${arg#*=}" ;;
+    *) REMAINING_ARGS="${REMAINING_ARGS:+$REMAINING_ARGS }$arg" ;;
+  esac
+done
+
 # --- Main ---
-case "${1:-}" in
-  --list-voices)
+case "${ACTION:-}" in
+  list-voices)
     list_voices
     ;;
-  --config)
+  config)
     show_config
     ;;
-  --from-cache)
+  stop)
+    pkill -9 kokoro-tts 2>/dev/null || true
+    echo "Stopped TTS playback."
+    ;;
+  auto-on)
+    echo "true" > /tmp/callout-auto-enabled
+    echo "Auto-TTS enabled."
+    ;;
+  auto-off)
+    rm -f /tmp/callout-auto-enabled
+    echo "Auto-TTS disabled."
+    ;;
+  from-cache)
     if [ ! -f "$CACHE_FILE" ]; then
-      echo "No cached response found. Ask Claude something first, then run /callout."
+      echo "No cached response. Ask Claude something first."
       exit 1
     fi
     text=$(cat "$CACHE_FILE")
     speak "$text"
-    echo "Speaking last response ($(echo "$text" | wc -c | tr -d ' ') chars)..."
+    echo "Speaking last response (${#text} chars)..."
     ;;
   *)
-    # Read from stdin if no file argument
-    if [ -t 0 ] && [ -n "${1:-}" ]; then
-      speak "$*"
+    # Text provided as args
+    if [ -n "$REMAINING_ARGS" ]; then
+      speak "$REMAINING_ARGS"
+      echo "Speaking: ${REMAINING_ARGS:0:50}..."
+    # No args at all → read from cache
+    elif [ -t 0 ] && [ $# -eq 0 ]; then
+      if [ ! -f "$CACHE_FILE" ]; then
+        echo "No cached response. Ask Claude something first."
+        exit 1
+      fi
+      text=$(cat "$CACHE_FILE")
+      speak "$text"
+      echo "Speaking last response (${#text} chars)..."
+    # Stdin pipe
     elif [ ! -t 0 ]; then
       text=$(cat)
       speak "$text"
-    else
-      echo "Usage: speak.sh [--from-cache | --list-voices | --config | TEXT]"
-      echo "  Or pipe text: echo 'hello' | speak.sh"
     fi
     ;;
 esac
