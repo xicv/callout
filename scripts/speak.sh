@@ -4,7 +4,7 @@
 set -euo pipefail
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-CACHE_FILE="/tmp/callout-last-response.txt"
+SESSION_ID=""
 LOG_FILE="/tmp/callout.log"
 
 # Configuration via environment (set in settings.json or overridden per-call)
@@ -135,19 +135,20 @@ speak_kokoro() {
   kokoro-tts "$tmpfile" --voice "$VOICE" --speed "$SPEED" --stream $model_args >>"$LOG_FILE" 2>&1 &
   local tts_pid=$!
 
-  # Restore audio when TTS finishes
-  if [ "$AUDIO_DUCK" = "true" ] && [ -x "$PLUGIN_ROOT/scripts/audio-duck.sh" ]; then
-    (
-      while kill -0 "$tts_pid" 2>/dev/null; do sleep 0.5; done
-      "$PLUGIN_ROOT/scripts/audio-duck.sh" restore
-      rm -f "$tmpfile"
-    ) &
-  else
-    (
-      while kill -0 "$tts_pid" 2>/dev/null; do sleep 0.5; done
-      rm -f "$tmpfile"
-    ) &
+  # Track PID per session for targeted interruption
+  if [ -n "$SESSION_ID" ]; then
+    echo "$tts_pid" > "/tmp/callout-${SESSION_ID}-pid"
   fi
+
+  # Restore audio and clean up when TTS finishes
+  (
+    while kill -0 "$tts_pid" 2>/dev/null; do sleep 0.5; done
+    if [ "$AUDIO_DUCK" = "true" ] && [ -x "$PLUGIN_ROOT/scripts/audio-duck.sh" ]; then
+      "$PLUGIN_ROOT/scripts/audio-duck.sh" restore
+    fi
+    rm -f "$tmpfile"
+    [ -n "$SESSION_ID" ] && rm -f "/tmp/callout-${SESSION_ID}-pid"
+  ) &
 }
 
 speak_say() {
@@ -230,9 +231,19 @@ for arg in "$@"; do
     --auto-off) ACTION="auto-off" ;;
     --voice=*) VOICE="${arg#*=}" ;;
     --speed=*) SPEED="${arg#*=}" ;;
+    --session=*) SESSION_ID="${arg#*=}" ;;
     *) REMAINING_ARGS="${REMAINING_ARGS:+$REMAINING_ARGS }$arg" ;;
   esac
 done
+
+# Resolve session-scoped cache file
+if [ -n "$SESSION_ID" ]; then
+  CACHE_FILE="/tmp/callout-${SESSION_ID}-response.txt"
+else
+  # Fallback: find most recent session cache
+  CACHE_FILE=$(ls -t /tmp/callout-*-response.txt 2>/dev/null | head -1)
+  CACHE_FILE="${CACHE_FILE:-/tmp/callout-no-session-response.txt}"
+fi
 
 # --- Main ---
 case "${ACTION:-}" in
@@ -243,15 +254,29 @@ case "${ACTION:-}" in
     show_config
     ;;
   stop)
-    pkill -9 kokoro-tts 2>/dev/null || true
+    # Kill this session's TTS or all if no session
+    if [ -n "$SESSION_ID" ] && [ -f "/tmp/callout-${SESSION_ID}-pid" ]; then
+      kill -9 "$(cat "/tmp/callout-${SESSION_ID}-pid")" 2>/dev/null || true
+      rm -f "/tmp/callout-${SESSION_ID}-pid"
+    else
+      pkill -9 kokoro-tts 2>/dev/null || true
+    fi
     echo "Stopped TTS playback."
     ;;
   auto-on)
-    echo "true" > /tmp/callout-auto-enabled
+    if [ -n "$SESSION_ID" ]; then
+      echo "true" > "/tmp/callout-${SESSION_ID}-auto"
+    else
+      echo "true" > /tmp/callout-auto-enabled
+    fi
     echo "Auto-TTS enabled."
     ;;
   auto-off)
-    rm -f /tmp/callout-auto-enabled
+    if [ -n "$SESSION_ID" ]; then
+      rm -f "/tmp/callout-${SESSION_ID}-auto"
+    else
+      rm -f /tmp/callout-auto-enabled
+    fi
     echo "Auto-TTS disabled."
     ;;
   from-cache)
@@ -264,14 +289,13 @@ case "${ACTION:-}" in
   *)
     # Text provided as args
     if [ -n "$REMAINING_ARGS" ]; then
-      # Check if it's a file path
       if [ -f "$REMAINING_ARGS" ]; then
         speak "$(cat "$REMAINING_ARGS")"
       else
         speak "$REMAINING_ARGS"
       fi
-    # No args → read from cache (works both in terminal and from Claude's Bash tool)
-    elif [ $# -eq 0 ]; then
+    # No args → read from cache
+    elif [ $# -eq 0 ] || [ -z "$REMAINING_ARGS" ]; then
       if [ ! -f "$CACHE_FILE" ]; then
         echo "No cached response. Ask Claude something first."
         exit 1

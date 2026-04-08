@@ -209,73 +209,19 @@ SKILLS_DIR="$HOME/.claude/skills"
 mkdir -p "$SKILLS_DIR/callout"
 
 # Write SKILL.md directly to user skills (plugin skills are namespaced, user skills are direct)
-cat > "$SKILLS_DIR/callout/SKILL.md" << SKILL_EOF
+cat > "$SKILLS_DIR/callout/SKILL.md" << 'SKILL_EOF'
 ---
 name: callout
 description: "Read Claude's last response aloud using text-to-speech. Supports voice, speed, and engine configuration. Use when: /callout, speak response, read aloud, TTS, text to speech."
 ---
 
-# Callout - Text-to-Speech for Claude Code
+Run this single command. Pass all arguments through. Reply with one short sentence confirming the action.
 
-Read the last response or custom text aloud using Kokoro TTS (local, high-quality) with macOS \`say\` as fallback.
-
-The plugin root is at \`$SCRIPT_DIR\`. Use this path for all script references below.
-
-## Behavior
-
-Parse the arguments and execute the appropriate action using the Bash tool:
-
-### If arguments contain \`--stop\`:
-\`\`\`bash
-bash $SCRIPT_DIR/scripts/interrupt.sh
-\`\`\`
-Report: "Stopped TTS playback."
-
-### If arguments contain \`--auto-on\`:
-\`\`\`bash
-echo "true" > /tmp/callout-auto-enabled
-\`\`\`
-Report: "Auto-TTS enabled. Responses will be spoken automatically."
-
-### If arguments contain \`--auto-off\`:
-\`\`\`bash
-rm -f /tmp/callout-auto-enabled
-\`\`\`
-Report: "Auto-TTS disabled."
-
-### If arguments contain \`--list-voices\`:
-\`\`\`bash
-CLAUDE_PLUGIN_ROOT=$SCRIPT_DIR bash $SCRIPT_DIR/scripts/speak.sh --list-voices
-\`\`\`
-
-### If arguments contain \`--config\`:
-\`\`\`bash
-CLAUDE_PLUGIN_ROOT=$SCRIPT_DIR bash $SCRIPT_DIR/scripts/speak.sh --config
-\`\`\`
-
-### If arguments contain custom text (no flags):
-Speak the provided text:
-\`\`\`bash
-echo "\$ARGUMENTS" | CLAUDE_PLUGIN_ROOT=$SCRIPT_DIR bash $SCRIPT_DIR/scripts/speak.sh
-\`\`\`
-
-### If no arguments (just \`/callout\`):
-Read the cached last response:
-\`\`\`bash
-CLAUDE_PLUGIN_ROOT=$SCRIPT_DIR bash $SCRIPT_DIR/scripts/speak.sh --from-cache
-\`\`\`
-
-### Passing voice/speed overrides:
-Extract \`--voice=NAME\` and \`--speed=N\` from arguments and pass them:
-\`\`\`bash
-CALLOUT_VOICE="NAME" CALLOUT_SPEED="N" CLAUDE_PLUGIN_ROOT=$SCRIPT_DIR bash $SCRIPT_DIR/scripts/speak.sh --from-cache
-\`\`\`
-
-## Important
-- Always run TTS commands in background so they don't block: append \`&\` or use the script's built-in async mode
-- If the cached response file doesn't exist, tell the user there's no recent response to read
-- Keep the response to the user brief - just confirm what action was taken
 SKILL_EOF
+# Append the command with expanded SCRIPT_DIR (not inside heredoc to allow variable expansion)
+echo '```bash' >> "$SKILLS_DIR/callout/SKILL.md"
+echo "CLAUDE_PLUGIN_ROOT=$SCRIPT_DIR bash $SCRIPT_DIR/scripts/speak.sh --session=\${CLAUDE_SESSION_ID} \$ARGUMENTS" >> "$SKILLS_DIR/callout/SKILL.md"
+echo '```' >> "$SKILLS_DIR/callout/SKILL.md"
 echo -e "  ${GREEN}OK${NC} /callout skill installed"
 
 # ─── Step 8: Register plugin with Claude Code ───

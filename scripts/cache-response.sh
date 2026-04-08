@@ -1,10 +1,9 @@
 #!/bin/bash
-# Callout Stop Hook - Caches Claude's last response for /callout to read
+# Callout Stop Hook - Caches Claude's last response per session
 # If auto-TTS is enabled, also speaks the response immediately
 set -uo pipefail
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-CACHE_FILE="/tmp/callout-last-response.txt"
 LOG_FILE="/tmp/callout.log"
 
 log() {
@@ -13,19 +12,26 @@ log() {
 
 log "Stop hook triggered"
 
-# Small delay to ensure transcript is fully written
 sleep 0.5
 
 # Read hook input JSON from stdin
 input=$(cat)
 
-# Extract transcript path
+# Extract session_id and transcript path
+session_id=$(echo "$input" | jq -r '.session_id // empty' 2>/dev/null)
 transcript_path=$(echo "$input" | jq -r '.transcript_path // empty' 2>/dev/null)
+
+if [ -z "$session_id" ]; then
+  log "No session_id in hook input"
+  exit 0
+fi
 
 if [ -z "$transcript_path" ]; then
   log "No transcript_path in hook input"
   exit 0
 fi
+
+CACHE_FILE="/tmp/callout-${session_id}-response.txt"
 
 # Expand tilde
 transcript_path="${transcript_path/#\~/$HOME}"
@@ -36,7 +42,6 @@ if [ ! -f "$transcript_path" ]; then
 fi
 
 # Extract Claude's last response text from transcript
-# Walk messages in reverse to find the final assistant text
 claude_response=""
 while IFS= read -r line; do
   message_type=$(echo "$line" | jq -r '.type' 2>/dev/null)
@@ -55,7 +60,7 @@ if [ -z "$claude_response" ]; then
   exit 0
 fi
 
-# Check for TTS_SUMMARY marker - prefer summary over full response
+# Check for TTS_SUMMARY marker
 if echo "$claude_response" | grep -q "<!-- TTS_SUMMARY"; then
   tts_summary=$(echo "$claude_response" | awk '
     {
@@ -78,14 +83,14 @@ if echo "$claude_response" | grep -q "<!-- TTS_SUMMARY"; then
   fi
 fi
 
-# Cache the response
+# Cache the response (session-scoped)
 echo "$claude_response" > "$CACHE_FILE"
-log "Cached response (${#claude_response} chars) to $CACHE_FILE"
+log "Cached response (${#claude_response} chars) to $CACHE_FILE [session=$session_id]"
 
-# Auto-TTS: if enabled, speak immediately
-if [ -f /tmp/callout-auto-enabled ]; then
-  log "Auto-TTS enabled, speaking response"
-  echo "$claude_response" | bash "$PLUGIN_ROOT/scripts/speak.sh" &
+# Auto-TTS: if enabled for this session, speak immediately
+if [ -f "/tmp/callout-${session_id}-auto" ]; then
+  log "Auto-TTS enabled for session $session_id, speaking"
+  echo "$claude_response" | bash "$PLUGIN_ROOT/scripts/speak.sh" --session="$session_id" &
 fi
 
 exit 0
