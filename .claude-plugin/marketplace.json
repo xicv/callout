@@ -1,0 +1,12 @@
+{
+  "name": "callout-tts",
+  "owner": {
+    "name": "xicao"
+  },
+  "plugins": [
+    {
+      "name": "callout",
+      "source": "./"
+    }
+  ]
+}

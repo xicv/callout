@@ -1,0 +1,11 @@
+{
+  "env": {
+    "CALLOUT_VOICE": "af_heart",
+    "CALLOUT_SPEED": "1.0",
+    "CALLOUT_ENGINE": "auto",
+    "CALLOUT_AUTO": "false",
+    "CALLOUT_MAX_CHARS": "5000",
+    "CALLOUT_AUDIO_DUCK": "true",
+    "CALLOUT_DUCK_LEVEL": "5"
+  }
+}

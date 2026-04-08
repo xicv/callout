@@ -1,0 +1,51 @@
+{
+  "name": "callout",
+  "description": "Text-to-speech for Claude Code responses. Type /callout to hear the last response spoken aloud using Kokoro TTS or macOS say.",
+  "version": "0.1.0",
+  "author": {
+    "name": "xicao"
+  },
+  "license": "Apache-2.0",
+  "keywords": ["tts", "voice", "speech", "kokoro", "audio", "accessibility"],
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/cache-response.sh",
+            "timeout": 15,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/interrupt.sh",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/cleanup.sh",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}
