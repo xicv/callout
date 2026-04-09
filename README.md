@@ -12,7 +12,9 @@ Speak Claude Code responses aloud using [Kokoro TTS](https://github.com/hexgrad/
 - Audio ducking (lowers Apple Music while speaking)
 - Smart interruption — stops playback when you start typing
 - Silent operation — no output noise, just audio
+- Multi-session isolation — each Claude Code session gets its own cache
 - Markdown stripping for clean speech output
+- File reading — `/callout path/to/file.txt` reads a file aloud
 
 ## Quick Start
 
@@ -45,6 +47,7 @@ Then restart Claude Code and use `/callout`.
 | `/callout --list-voices` | Show all 54 voices |
 | `/callout --config` | Show current settings |
 | `/callout --stop` | Stop playback mid-speech |
+| `/callout path/to/file.txt` | Read a file aloud |
 
 ### Stopping Playback
 
@@ -95,12 +98,12 @@ callout/
 ```
 
 **How it works:**
-1. **Stop hook** caches every Claude response to `/tmp/callout-last-response.txt`
-2. **`/callout`** reads the cache, strips markdown, pipes to Kokoro TTS streaming
-3. **UserPromptSubmit hook** kills any playing audio when you type next
-4. **SessionEnd hook** cleans up temp files
+1. **Stop hook** caches every Claude response to `/tmp/callout-{session_id}-response.txt`
+2. **`/callout`** reads the session-scoped cache, strips markdown, pipes to Kokoro TTS streaming
+3. **UserPromptSubmit hook** kills only the current session's TTS process (via PID tracking)
+4. **SessionEnd hook** cleans up only the current session's temp files
 
-The `/callout` skill is a minimal 8-line SKILL.md that delegates all logic to `speak.sh` — this keeps Claude's processing fast since it only needs to run a single bash command.
+Each session is isolated — running multiple Claude Code instances won't cross-talk. The `/callout` skill is a minimal SKILL.md that delegates all logic to `speak.sh` via `${CLAUDE_SESSION_ID}`, keeping Claude's processing fast.
 
 ## Prerequisites
 
